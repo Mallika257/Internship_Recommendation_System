@@ -49,7 +49,7 @@ Internship_Recommendation_System/
 ├── internships.csv             # Internship Dataset (20 Sample Roles)
 ├── top_internship_qr.png       # Sample Generated QR Code Output
 ├── README.md                   # Complete Project Documentation & Setup Guide
-└── VIVA_INTERVIEW_GUIDE.md     # Resume Description, Project Explanation & Viva Q&A
+   
 ```
 
 ---
