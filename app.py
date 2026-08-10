@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import qrcode
 from io import BytesIO
+import pypdf
 
 
 # =========================================================
@@ -13,6 +14,43 @@ st.set_page_config(
     page_icon="🎓",
     layout="wide"
 )
+
+# =========================================================
+# HELPER: RESUME PARSER (NLP KEYWORD EXTRACTOR)
+# =========================================================
+
+def extract_skills_from_resume(uploaded_file):
+    extracted_text = ""
+    try:
+        if uploaded_file.name.endswith(".pdf"):
+            reader = pypdf.PdfReader(uploaded_file)
+            for page in reader.pages:
+                text = page.extract_text()
+                if text:
+                    extracted_text += text + " "
+        else:
+            extracted_text = uploaded_file.read().decode("utf-8")
+    except Exception as e:
+        st.error(f"Error reading resume file: {e}")
+        return []
+
+    KNOWN_SKILLS = [
+        "python", "sql", "pandas", "numpy", "java", "c++", "c#", "machine learning",
+        "data analysis", "data science", "html", "css", "javascript", "react",
+        "node", "django", "flask", "power bi", "tableau", "aws", "cloud", "docker",
+        "kubernetes", "cybersecurity", "database", "git", "nlp", "deep learning",
+        "computer vision", "tensorflow", "pytorch", "excel", "r", "spark", "hadoop",
+        "bash", "linux", "scikit-learn", "matplotlib", "seaborn"
+    ]
+
+    extracted_skills = []
+    text_lower = extracted_text.lower()
+    for s in KNOWN_SKILLS:
+        if s in text_lower and s not in extracted_skills:
+            extracted_skills.append(s)
+
+    return extracted_skills
+
 
 # =========================================================
 # MODERN CUSTOM CSS STYLING
@@ -46,6 +84,19 @@ st.markdown("""
         background: rgba(99, 102, 241, 0.15);
         color: #818cf8;
         border: 1px solid rgba(99, 102, 241, 0.3);
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        margin-right: 6px;
+        margin-top: 4px;
+    }
+
+    .skill-gap-tag {
+        display: inline-block;
+        background: rgba(245, 158, 11, 0.15);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.3);
         padding: 4px 12px;
         border-radius: 20px;
         font-size: 0.82rem;
@@ -145,7 +196,7 @@ if "qr_bytes" not in st.session_state:
 # =========================================================
 
 st.markdown('<div class="main-header">🎓 Internship Recommendation System</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Enter your profile details to discover personalized internship opportunities tailored to your skills and preferences.</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Enter your profile details or upload your resume to discover personalized internship opportunities tailored to your skills and preferences.</div>', unsafe_allow_html=True)
 
 st.divider()
 
@@ -155,6 +206,20 @@ st.divider()
 # =========================================================
 
 st.subheader("👤 Student Profile")
+
+# Resume File Uploader Feature
+uploaded_file = st.file_uploader(
+    "📄 Upload Resume (PDF or TXT) to Auto-Extract Skills",
+    type=["pdf", "txt"],
+    key="resume_uploader"
+)
+
+default_skills = ""
+if uploaded_file is not None:
+    extracted = extract_skills_from_resume(uploaded_file)
+    if extracted:
+        default_skills = ", ".join(extracted)
+        st.info(f"✨ Auto-extracted {len(extracted)} skills from resume: **{default_skills}**")
 
 col1, col2 = st.columns(2)
 
@@ -172,6 +237,7 @@ with col1:
 with col2:
     skills = st.text_input(
         "Enter your skills",
+        value=default_skills if default_skills else st.session_state.get("student_skills", ""),
         placeholder="Example: Python, SQL, Pandas",
         key="student_skills"
     )
@@ -219,7 +285,7 @@ if st.button(
     # -----------------------------------------------------
     if not name.strip() or not branch.strip() or not skills.strip():
         st.warning(
-            "⚠️ Please fill in your name, branch, and skills."
+            "⚠️ Please fill in your name, branch, and skills (or upload a resume)."
         )
     else:
         recommendations = []
@@ -244,6 +310,12 @@ if st.button(
             matched_skills = [
                 skill for skill in required_skills
                 if skill in student_skills
+            ]
+
+            # Find missing skills (Skill Gap Analysis)
+            missing_skills = [
+                skill for skill in required_skills
+                if skill not in student_skills
             ]
 
             # 1. Skill Match (60% weight)
@@ -286,6 +358,7 @@ if st.button(
                     "domain": internship["domain"],
                     "work_mode": internship["work_mode"],
                     "matched_skills": matched_skills,
+                    "missing_skills": missing_skills,
                     "match": match_percentage,
                     "match_level": match_level,
                     "link": internship.get("link", "")
@@ -380,11 +453,23 @@ if st.session_state.search_done:
                 st.write("")
 
                 matched = recommendation["matched_skills"]
-                if matched:
-                    skills_html = "".join([f'<span class="skill-tag">✓ {s}</span>' for s in matched])
-                    st.markdown(f"**🛠️ Matched Skills:**<br>{skills_html}", unsafe_allow_html=True)
-                else:
-                    st.write("🛠️ **Matched Skills:** None")
+                missing = recommendation.get("missing_skills", [])
+
+                col_sk1, col_sk2 = st.columns(2)
+
+                with col_sk1:
+                    if matched:
+                        skills_html = "".join([f'<span class="skill-tag">✓ {s}</span>' for s in matched])
+                        st.markdown(f"**🛠️ Matched Skills:**<br>{skills_html}", unsafe_allow_html=True)
+                    else:
+                        st.write("🛠️ **Matched Skills:** None")
+
+                with col_sk2:
+                    if missing:
+                        gap_html = "".join([f'<span class="skill-gap-tag">⚠️ {s}</span>' for s in missing])
+                        st.markdown(f"**💡 Skill Gap (Need to Learn):**<br>{gap_html}", unsafe_allow_html=True)
+                    else:
+                        st.markdown("**💡 Skill Gap:** <span style='color:#34d399; font-weight:600;'>None - Complete Match! 🎉</span>", unsafe_allow_html=True)
 
                 st.write("")
 
