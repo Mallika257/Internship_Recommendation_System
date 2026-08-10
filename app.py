@@ -487,43 +487,91 @@ if st.session_state.search_done:
         )
 
     # -----------------------------------------------------
-    # 📱 QR CODE GENERATION SECTION
+    # 📱 ENHANCED DYNAMIC QR CODE GENERATOR SECTION
     # -----------------------------------------------------
     if recommendations:
-        st.subheader("📱 Generate QR Code")
+        st.subheader("📱 Dynamic QR Code Generator")
         st.write(
-            "Generate a QR code containing the application link for your top recommended internship."
+            "Generate customized, scannable QR codes for any recommended internship application link."
         )
 
-        if st.button("📱 Generate QR Code", use_container_width=True):
-            top_internship = recommendations[0]
-            qr_data = top_internship["link"]
+        col_qr1, col_qr2 = st.columns([2, 1])
+
+        with col_qr1:
+            # 1. Internship Selection Dropdown
+            internship_options = {
+                f"#{idx+1}. {rec['title']} ({round(rec['match'], 1)}% Match)": rec
+                for idx, rec in enumerate(recommendations)
+            }
+            selected_option = st.selectbox(
+                "Select Internship Role for QR Code",
+                list(internship_options.keys()),
+                key="qr_role_select"
+            )
+            target_internship = internship_options[selected_option]
+
+            # 2. Color Theme Selection
+            theme_colors = {
+                "Indigo Blue 🔵": "#4f46e5",
+                "Emerald Green 🟢": "#059669",
+                "Vibrant Purple 🟣": "#7c3aed",
+                "Classic Black 🖤": "#000000"
+            }
+            color_choice = st.radio(
+                "Choose QR Code Color Theme",
+                list(theme_colors.keys()),
+                horizontal=True,
+                key="qr_color_theme"
+            )
+
+        with col_qr2:
+            st.write("")
+            st.write("")
+            generate_qr_click = st.button("📱 Generate Custom QR Code", use_container_width=True)
+
+        if generate_qr_click:
+            qr_data = target_internship["link"]
 
             qr = qrcode.QRCode(
                 version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_H,
                 box_size=10,
-                border=5
+                border=4
             )
             qr.add_data(qr_data)
             qr.make(fit=True)
 
-            qr_image = qr.make_image()
+            fill_hex = theme_colors[color_choice]
+            qr_image = qr.make_image(fill_color=fill_hex, back_color="white")
 
             buffer = BytesIO()
             qr_image.save(buffer, format="PNG")
+            
+            # Store in session state
             st.session_state.qr_bytes = buffer.getvalue()
+            st.session_state.qr_title = target_internship["title"]
 
         if st.session_state.qr_bytes is not None:
-            st.success("✅ QR Code generated successfully!")
-            st.image(
-                st.session_state.qr_bytes,
-                caption="Top Recommended Internship Application Link",
-                width=300
-            )
-            st.download_button(
-                label="⬇️ Download QR Code",
-                data=st.session_state.qr_bytes,
-                file_name="top_internship_qr.png",
-                mime="image/png",
-                use_container_width=True
-            )
+            st.divider()
+            col_preview1, col_preview2 = st.columns([1, 2])
+            
+            with col_preview1:
+                st.image(
+                    st.session_state.qr_bytes,
+                    caption=f"Application QR: {st.session_state.get('qr_title', 'Internship')}",
+                    width=260
+                )
+            
+            with col_preview2:
+                st.success(f"✅ Custom QR Code Ready for **{st.session_state.get('qr_title', 'Internship')}**!")
+                st.write("Scan this QR code using your smartphone camera or QR scanner to open the application URL directly.")
+                
+                clean_filename = f"{st.session_state.get('qr_title', 'internship').lower().replace(' ', '_').replace('/', '_')}_qr.png"
+                
+                st.download_button(
+                    label=f"⬇️ Download {st.session_state.get('qr_title', 'Internship')} QR Code (.png)",
+                    data=st.session_state.qr_bytes,
+                    file_name=clean_filename,
+                    mime="image/png",
+                    use_container_width=True
+                )
